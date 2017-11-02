@@ -1,7 +1,7 @@
 #ifndef _TRADE_H
 #define _TRADE_H
 
-typedef trade_s struct
+typedef struct trade_s
 {
     char    trade_code[7];
     char    trade_data[9];

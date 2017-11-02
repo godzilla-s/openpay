@@ -2,7 +2,7 @@
 #define _SERVICE_H
 
 // 服务
-typedef service_s struct
+typedef struct service_s
 {
     char    service_code[7];
     char    txn_date[9];

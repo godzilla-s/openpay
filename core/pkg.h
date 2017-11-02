@@ -2,7 +2,7 @@
 #define _PKG_H
 
 // 消息报
-typedef pkg_s struct
+typedef struct pkg_s
 {
     char    pkg_type[5];
     char    direct[2];
