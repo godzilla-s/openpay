@@ -2,9 +2,9 @@
 #ifndef _LIST_H
 #define _LIST_H
 
-#include "mempool.h"
+#include "common.h"
 
-// 单向链表
+// 双向链表
 typedef struct list_node_s 
 {
     int  type;
@@ -17,8 +17,12 @@ typedef struct list_s
 {
     list_node_t *head;
     list_node_t *tail;
-    int  size;
-    mem_config_t *config;
+    int  size;  
+    int  type;
+    
+    void* (*malloc)(uint32 size);
+    void (*free)(void *alloc);
+    void* (*calloc)(int block, int size);
 } list_t;
 
 #endif

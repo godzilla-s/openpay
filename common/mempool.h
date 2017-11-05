@@ -1,11 +1,14 @@
 #ifndef _MEMPOOL_H
 #define _MEMPOOL_H
 
+#include "common.h"
+
 typedef struct mem_config_s
 {
-    void (*alloc)(int size);
-    void (*free)(void *alloc);
-    void (*calloc)(int block, int size);
+    void* (*malloc)(uint32 size);
+    void (*free)(void *ptr);
+    void* (*calloc)(uint32 count, uint32 size);
+    void* (*realloc)(void *ptr, uint32 size);
 } mem_config_t;
 
 typedef struct mem_node_s 

@@ -1,12 +1,29 @@
 #ifndef _LOG_H
 #define _LOG_H
 
-#define LOG_LEVEL_DEBUG     1
-#define LOG_LEVEL_WARN      2
-#define LOG_LEVEL_INFO      3 
-#define LOG_LEVEL_ERROR     4 
-#define LOG_LEVEL_FATAL     5
+#include <stdio.h>
+#include <string.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <time.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
-void log_init();
+#define ll_debug        4
+#define ll_warn         3
+#define ll_info         2
+#define ll_error        1
+
+// 一次最多写入数据
+#define MAX_LINE_SIZE    2048
+
+void loginit(int level, char *path, char *outfile);
+
+void rawlog(int level, const char *file, int line, char *fmt, ...);
+
+#define V_INFO(args)  __FILE__,__LINE__
+
+#define log(level, ...) rawlog(level, V_INFO(args), __VA_ARGS__)
 
 #endif
