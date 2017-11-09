@@ -155,7 +155,7 @@ void loginit(int level, char *path, char *outfile)
 
 void rawlog(int level, const char *file, int line, char *fmt, ...)
 {
-    char    *pstr = null;
+    char   *pstr = NULL;
     if(level > ll_debug || level < ll_error)
         return ;
 

@@ -3,10 +3,10 @@
 
 #include "mysql.h"
 
-typedef struct dbutil_s {
+typedef struct dbutil_mysql_s {
     MYSQL   mysql;
     MYSQL_RES *res;
     MYSQL_ROW row;
-} dbutil_t;
+} dbutil_mysql_t;
 
 #endif
