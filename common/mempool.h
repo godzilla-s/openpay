@@ -11,14 +11,11 @@ typedef struct mem_config_s
     void* (*realloc)(void *ptr, uint32 size);
 } mem_config_t;
 
-typedef struct mem_node_s 
-{
-
-} mem_node_t;
-
 typedef struct mempool_s
 {
-
+    void    *allocs;
+    int     size;
+    int     used; 
 } mempool_t;
 
 #endif
