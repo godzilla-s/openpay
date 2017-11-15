@@ -1,4 +1,5 @@
+/* 加载服务配置 */
+#include <stdio.h>
 #include "service.h"
+#include "common.h"
 
-int 
-load_service()
