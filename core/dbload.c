@@ -16,7 +16,8 @@ db_read_service()
 int 
 db_read_trade() 
 {
-
+    int     ret;
+    db_trade_t      trade; 
 }
 
 int 
