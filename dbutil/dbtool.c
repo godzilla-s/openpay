@@ -2,6 +2,30 @@
 #include <stdio.h>
 #include <unistd.h>
 
+char *key_word[] = {
+    "action",
+    "table",
+    "read_by",
+    "order_by",
+    "order_by_desc",
+    "group_by",
+    "add",
+    "update_by",
+    "function"
+};
+
+char *data_type[] = {
+    "int",
+    "str",
+    "double"
+};
+
+typedef struct tblfield {
+    char    type[8];
+    char    name[33];
+    int     length;
+};
+
 int 
 read_file(char *fileName, char *stream)
 {
@@ -26,7 +50,7 @@ main(int args, char *argv[])
     char *fileName = NULL;
     char *outfile = NULL;
 
-    while((opt = getopt(args, argv, "f:o")) != -1)
+    while((opt = getopt(args, argv, "f:o:")) != -1)
     {
         switch(opt)
         {
@@ -39,3 +63,4 @@ main(int args, char *argv[])
 
     return 0;
 }
+// dbtool -f db_server.act -o

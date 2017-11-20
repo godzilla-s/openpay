@@ -1,0 +1,13 @@
+begin_table Test
+    id      int 
+    name    str     32
+    birth   str     20
+    nation  str     30
+end
+
+begin_func read_by id end 
+begin_func add end 
+begin_func read_by id name order_by id end 
+
+begin_func update_by id as db_update end 
+ 

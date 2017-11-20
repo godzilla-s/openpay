@@ -12,8 +12,10 @@ typedef struct engine_s
     trade_t     trades[EGN_MAX_TRADE];
     module_t    modules[EGN_MAX_MODULE];
     pkg_t       pkgs[EGN_MAX_SERVICE];
-
-    mempool_t   *mempool; 
 } engine_t;
+
+
+#define SERVICE_OK  0
+#define SERVICE_ERR -1
 
 #endif
