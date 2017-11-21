@@ -75,6 +75,7 @@ int main(int argc, char* argv[]) {
 }  
 
 // 参考： http://zetcode.com/db/mysqlc/ 
+// 参考： http://ask.csdn.net/questions/242518
 int db_raw_query(const char *sql, ...)
 {
     va_list  vargs;
