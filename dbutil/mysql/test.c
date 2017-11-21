@@ -74,4 +74,81 @@ int main(int argc, char* argv[]) {
     exit(1);  
 }  
 
-// 参考： http://zetcode.com/db/mysqlc/
+// 参考： http://zetcode.com/db/mysqlc/ 
+int db_raw_query(const char *sql, ...)
+{
+    va_list  vargs;
+    va_start(vargs, sql);
+    void  *ptr;
+    int    type;
+    int    len;
+
+    MYSQL_STMT  *stmt = NULL;
+
+    /* init */
+    stmt = mysql_stmt_init(mysql);
+    if (stmt == NULL)
+    {
+        printf("fail to init stmt: %s\n", mysql_error(mysql));
+        return -1;
+    }
+
+    /* prepare */
+    mysql_stmt_prepare(stmt, sql, strlen(sql));
+
+    /* bind params */
+    MYSQL_BIND  bind[3];
+    while( (ptr = va_arg(vargs, void *)) != NULL )
+    {
+        type = va_arg(vargs, int);
+        len = va_arg(vargs, int);
+
+        if (type == FLD_INT)
+        {
+            bind[i].buffer_type = MYSQL_TYPE_LONG;
+            bind[i].buffer = ptr; 
+            bind[i].buffer_length = sizeof(long);
+        }
+
+        if (type == FLD_STR)
+        {
+            bind[i].buffer_type = MYSQL_TYPE_STRING;
+            bind[i].buffer = ptr;
+            bind[i].buffer_length = len;
+        }
+    }
+    mysql_stmt_bind_param(stmt, bind+0);
+
+    /* execute */
+    ret = mysql_stmt_execute(stmt);
+    if (ret)
+    {
+        printf("fail to execute stmt:%s\n", mysql_error(mysql));
+        return -1;
+    }
+    else
+    {
+        mysql_stmt_bind_result(stmt, bind + 1);
+        
+    }
+
+    /* close stmt */
+    mysql_stmt_close(stmt);
+}
+
+int db_query_service(char *servId)
+{
+    MYSQL_RES *result = db_raw_query("select * from db_service where serviceid=? and status=?", 
+            servId, FLD_INT, -1,
+            status, FLD_INT, -1,
+            NULL, 
+            &servId, FLD_INT, -1, 
+            servDesc, FLD_STR, 32,
+            &flowId, FLD_INT, -1,
+            route, FLD_STR, 32,
+            NULL);
+    if (result == NULL)
+    {
+
+    }
+}
