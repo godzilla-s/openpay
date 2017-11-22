@@ -5,6 +5,8 @@
 #define FLD_INT     1
 #define FLD_STR     2
 
+int db_query(MYSQL *mysql, char *sql, ...);
+
 int main()
 {
     MYSQL   mysql; 
@@ -13,6 +15,8 @@ int main()
     const char* password = "root123456";  
     const char* database = "mybase";  
     const int   port = 3306;  
+    const char* socket = NULL;
+    const int flag = 0;
 
     if(!mysql_init(&mysql))
     {
@@ -20,18 +24,34 @@ int main()
         return -1;
     }
 
+    printf("mysql init ok\n");
+
     if(!mysql_real_connect(&mysql, host, user, password, database, port, socket, flag)) {  
         printf("fail to connect: %s\n", mysql_error(&mysql));
         return -1;  
     }
 
+    printf("mysql connect ok\n");
+
     int id;
     char name[30] = {'\0'};
-    db_query(&mysql, "select * from person where id=?", 
-            "male", FLD_STR, 4,
+    char sex[10] = "male";
+    int age;
+    int limit = 34;
+    char nsex[10] = {'\0'};
+
+    db_query(&mysql, "select name, sex, age from person where sex=? and age>?", 
+            sex, FLD_STR, 4,
+            &limit, FLD_INT, -1,
             NULL,
             name, FLD_STR, 30,
+            nsex, FLD_STR, 10,
+            &age, FLD_INT, -1,
             NULL);
+    printf("%s, %d, %s\n", name, age, nsex);
+
+    mysql_close(&mysql);
+
     return 0;   
 }
 
@@ -45,17 +65,24 @@ int db_query(MYSQL *mysql, char *sql, ...)
     int       paramCount = 0;
     va_start(vargs, sql);
 
-    MYSQL_STMT  *stmt = mysql_stmt_init(&mysql);
+    MYSQL_STMT  *stmt = mysql_stmt_init(mysql);
     if (stmt == NULL)
     {
-        printf("fail to init stmt: %s\n", mysql_error(&mysql));
+        printf("fail to init stmt: %s\n", mysql_error(mysql));
         return -1;
     }
 
+    printf("mysql stmt init ok\n");
+
     mysql_stmt_prepare(stmt, sql, strlen(sql));
+
+    printf("mysql stmt prepare ok\n");
+
     paramCount = mysql_stmt_param_count(stmt);
     
     MYSQL_BIND  *bindIn = calloc(paramCount, sizeof(MYSQL_BIND));
+
+    printf("bind in params: %d\n", paramCount);
 
     while(paramCount && (ptr = va_arg(vargs, void *)) != NULL)
     {
@@ -98,6 +125,8 @@ int db_query(MYSQL *mysql, char *sql, ...)
         return -1;
     }
 
+    MYSQL_FIELD *fields = mysql_fetch_fields(prepare_meta_result);
+
     int column_count= mysql_num_fields(prepare_meta_result);
     if(column_count <= 0)
     {
@@ -105,12 +134,21 @@ int db_query(MYSQL *mysql, char *sql, ...)
         return -1;
     }
 
+    // 打印字段fields 
+    for (i=0; i<column_count; i++)
+    {
+        printf("%s ", fields[i].name);
+    }
+    printf("\n");
+
     MYSQL_BIND  *bindOut = calloc(column_count, sizeof(MYSQL_BIND));
-    i=0;
     my_bool  *is_null = calloc(column_count, sizeof(my_bool));
     my_bool  *error = calloc(column_count, sizeof(my_bool));
-    unsigned long *length = calloc(cloumn_count, sizeof(unsigned long));
+    unsigned long *length = calloc(column_count, sizeof(unsigned long));
 
+    printf("bind out params: %d\n", column_count);
+
+    i=0;
     while((ptr = va_arg(vargs, void *)) != NULL)
     {
         type = va_arg(vargs, int);
@@ -134,6 +172,7 @@ int db_query(MYSQL *mysql, char *sql, ...)
             bindOut[i].length = &length[i];
             bindOut[i].error = &error[i];
         }
+        i++;
     }
 
     if(mysql_stmt_bind_result(stmt, bindOut))
@@ -168,8 +207,8 @@ int db_query(MYSQL *mysql, char *sql, ...)
                 else
                     printf("%s\t", (char *)bindOut[i].buffer);
             }
-            printf("\n");
         }
+        printf("\n");
     }
 
     free(bindIn);
@@ -182,5 +221,29 @@ int db_query(MYSQL *mysql, char *sql, ...)
 
     mysql_stmt_close(stmt);
 
+    return 0;
+}
+
+typedef struct db_select_s
+{
+    MYSQL_RES    *result;
+    MYSQL_STMT   *stmt; 
+    MYSQL_FIELD  *fields;
+} db_select_t;
+
+int db_select_open_by(db_select_t *select)
+{
+    return 0;
+}
+
+int db_select_fetch(db_select_t *select, void *data)
+{
+    return 0;
+}
+
+int db_select_close(db_select_t *select)
+{
+    mysql_free_result(select->result);
+    mysql_stmt_close(select->stmt); 
     return 0;
 }
