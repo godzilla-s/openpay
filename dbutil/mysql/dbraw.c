@@ -1,63 +1,43 @@
 // mysql 数据库操作
 #include <stdio.h>
+#include <string.h>
 #include "dbraw.h"
-#include "log.h"
+//#include "log.h"
 
 db_instance_t * 
-db_handle_new(char *host, int port, char *dbname, char *dbuser, char *dbpasswd)
+db_va_instance_new(char *host, int port, char *dbname, char *dbuser, char *dbpasswd)
 {
     int ret;
     db_instance_t *db = malloc(sizeof(db_instance_t));
-
-    if (!mysql_init(db->mysql))
+printf("begin init\n");
+    if (!mysql_init(&db->mysql))
     {
-        log(ll_error, "fail to init mysql:%s", get_db_error());
+        //log(ll_error, "fail to init mysql:%s", get_db_error());
+        printf("fail to init mysql");
+        return NULL;
     }
 
     // 设置编码方式
-    mysql_options(db->mysql, MYSQL_SET_CHARSET_NAME, "utf8");
-
+    // mysql_options(db->mysql, MYSQL_SET_CHARSET_NAME, "utf8");
+printf("begin connect\n");
     // 连接数据库 
-    ret =  mysql_real_connect(db->mysql, host, dbuser, dbpasswd, dbname, port, NULL, 0);
-    if (ret != 0)
+    ret =  mysql_real_connect(&db->mysql, host, dbuser, dbpasswd, dbname, port, NULL, 0);
+    if (!ret)
     {
-        log(ll_error, "Fail to connect mysql:%s", get_db_error());
-        return -1;
+        printf("Fail to connect mysql:%s\n", mysql_error(&db->mysql));
+        return NULL;
     }
 
     // 设置字符集为utf-8
-    mysql_set_charset_name(db->mysql, "utf8")
-    return 0;
+    // mysql_set_charset_name(db->mysql, "utf8");
+    return db;
 }
 
 void 
-db_instance_close(db_instance_t *db)
+db_va_instance_close(db_instance_t *db)
 {
-    mysql_close(mysql);
-    db->mysql = NULL;
+    mysql_close(&db->mysql);
     free(db);
-}
-
-// 查询操作 
-static int 
-db_raw_query(const char *sql)
-{
-    int  ret;
-    ret = mysql_real_query(mysql, sql, strlen(sql));
-    if (ret != 0)
-    {
-        log(ll_error, "fail to query mysql:%s", mysql_error(mysql));
-        return -1;
-    }
-
-    MYSQL_RES *result = mysql_store_result(mysql);
-    if(result == NULL)
-    {
-        log(ll_error, "fail to store result:%s", mysql_error(mysql));
-        return -1;
-    }
-
-    return 0;
 }
 
 /* 获取查询结果集 */
@@ -67,26 +47,25 @@ db_va_open_select(db_instance_t *db, db_select_t *select, char *sql, ...)
     void        *ptr; 
     int         type;
     int         len;
-    int         ret, i; 
+    int         ret, i = 0; 
     va_list     vargs;
     int         paramCount = 0;
     MYSQL_BIND  *bindInParam = NULL;
 
     va_start(vargs, sql);
 
-    if (db == NULL || db->mysql == NULL)
+    if (db == NULL || select == NULL)
         return -1;
 
-    if (select == NULL)
-        return -1;
-
-    select->stmt = mysql_stmt_init(mysql);
+printf("stmt init begin\n");
+    select->stmt = mysql_stmt_init(&db->mysql);
     if(select->stmt == NULL)
     {
         return -1;
     }
 
-    ret = mysql_stmt_prepare(stmt, sql, strlen(sql)
+    printf("stmt prepare begin\n");
+    ret = mysql_stmt_prepare(select->stmt, sql, strlen(sql));
     if (ret)
     {
         return -1;
@@ -97,11 +76,11 @@ db_va_open_select(db_instance_t *db, db_select_t *select, char *sql, ...)
         bindInParam = calloc(paramCount, sizeof(MYSQL_BIND));
     
     /* parse in params and set bind parameters */
-    while(paramCount && (ptr = va_arg(vargs, void *) != NULL)
+    while(paramCount && (ptr = va_arg(vargs, void *) != NULL))
     {
         type = va_arg(vargs, int);
         len = va_arg(vargs, int);
-
+printf("%d, %d\n", type, len);
         if(type == FLD_INT)
         {
             bindInParam[i].buffer_type = MYSQL_TYPE_LONG;
@@ -118,7 +97,7 @@ db_va_open_select(db_instance_t *db, db_select_t *select, char *sql, ...)
 
         i++;
     }
-
+    printf("mysql_stmt_bind_param begin\n");
     /* bind stmt parameters */
     ret = mysql_stmt_bind_param(select->stmt, bindInParam);
     if(ret)
@@ -126,25 +105,37 @@ db_va_open_select(db_instance_t *db, db_select_t *select, char *sql, ...)
         return -1;
     }
 
+    printf("mysql_stmt_execute\n");
+    /* execute stmt */
     ret = mysql_stmt_execute(select->stmt);
     if(ret)
     {
+        printf("fail to stmt execute:%s\n", mysql_stmt_error(select->stmt));
         return -1;
     }
 
+    printf("mysql_stmt_result_metadata begin\n");
     select->result = mysql_stmt_result_metadata(select->stmt);
     if(select->result == NULL)
     {
         return -1;
     }
 
+    printf("mysql_fetch_fields begin\n");
     select->fields = mysql_fetch_fields(select->result);
     if(select->fields == NULL)
     {
         return -1;
     }
 
-    free(bindInParam);
+    printf("mysql_num_fields begin\n");
+    int colCount = mysql_num_fields(select->result);
+    if(colCount > 0)
+        select->bindParam = calloc(colCount, sizeof(MYSQL_BIND));
+    if(select->bindParam == NULL)
+    {
+        return -1;
+    }
 
     return 0;
 }
@@ -156,18 +147,21 @@ db_va_select_fetch(db_select_t *select, ...)
     int             ret, i; 
     int             colCount = 0;
     int             type, len;
+    void            *ptr;
     va_list         vargs;
-    MYSQL_BIND      *bindOutParam = NULL;
+    MYSQL_BIND      *bindOutParam =select->bindParam;
 
     va_start(vargs, select);
-    colCount = mysql_num_fields(select->result);
-    if(colCount > 0)
-        bindOutParam = calloc(colCount, sizeof(MYSQL_BIND));
         
     if(bindOutParam == NULL)
     {
         return -1;
     }
+
+    colCount = mysql_num_fields(select->result);
+    my_bool  *is_null = calloc(colCount, sizeof(my_bool));
+    my_bool  *error = calloc(colCount, sizeof(my_bool));
+    unsigned long *length = calloc(colCount, sizeof(unsigned long));
 
     while((ptr = va_arg(vargs, void *)) != NULL)
     {
@@ -197,13 +191,40 @@ db_va_select_fetch(db_select_t *select, ...)
 
     if(mysql_stmt_bind_result(select->stmt, bindOutParam))
     {
-        printf("fail to bind result:%s\n", mysql_stmt_error(stmt));
+        printf("fail to bind result:%s\n", mysql_stmt_error(select->stmt));
         return -1;
     }
 
     if (mysql_stmt_store_result(select->stmt))
     {
         return -1;
+    }
+
+    if(!mysql_stmt_fetch(select->stmt))
+    {
+        for(i=0; i<colCount; i++)
+        {
+            if(bindOutParam[i].buffer_type == MYSQL_TYPE_LONG)
+            {
+                if(is_null[i])
+                    printf("NULL\t");
+                else
+                    printf("%d\t", *(int *)bindOutParam[i].buffer);
+            }
+
+            if(bindOutParam[i].buffer_type == MYSQL_TYPE_STRING)
+            {
+                if(is_null[i])
+                    printf("NULL\t");
+                else
+                    printf("%s\t", (char *)bindOutParam[i].buffer);
+            }
+        }
+        printf("\n");
+    }
+    else
+    {
+        printf("stmt fetch: %s\n", mysql_stmt_error(select->stmt));
     }
 
     free(bindOutParam);
@@ -215,6 +236,7 @@ db_va_select_fetch(db_select_t *select, ...)
 void  
 db_va_select_close(db_select_t *select)
 {
+    free(select->bindParam);
     mysql_free_result(select->result);
     mysql_stmt_close(select->stmt);
 }
@@ -223,5 +245,11 @@ db_va_select_close(db_select_t *select)
 int
 db_va_execute(db_instance_t *db, char *sql, ...)
 {
+    void        *ptr;
+    int         type;
+    int         len;
+    va_list     vargs;
+
+
     return 0;
 }

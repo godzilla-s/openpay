@@ -10,4 +10,6 @@ begin_func add end
 begin_func read_by id name order_by id end 
 
 begin_func update_by id as db_update end 
- 
+begin_func read_by id name birth as read_tables_2 end 
+
+// dbtool -f temp.act -o
