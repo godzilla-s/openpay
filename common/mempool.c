@@ -48,7 +48,7 @@ mempool_alloc(mempool_t *pool, int size)
     }
     void *ptr = pool->allocs + pool->used;
     memcpy(ptr, &size, sizeof(int));
-    pool->used = pool->used + size + sizeof(int);
+    pool->used += size + sizeof(int);
     return ptr + sizeof(int);
 }
 
