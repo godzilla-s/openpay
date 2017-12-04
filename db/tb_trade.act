@@ -1,0 +1,10 @@
+va_table tb_trade
+    trade_id    int
+    trade_code  str     6
+    flow_id     int 
+end
+
+va_index trade_id end
+va_func open_select_by end
+
+end

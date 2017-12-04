@@ -1,0 +1,12 @@
+va_table tb_server
+    serv_id     int
+    serv_code   str     6
+    flow_id     int 
+    route_id    str     32
+end 
+
+va_index id end 
+va_func read_by id end 
+va_func open_select_by end 
+
+end
