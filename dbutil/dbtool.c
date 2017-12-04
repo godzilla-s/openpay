@@ -23,7 +23,7 @@ char funcKey[][20] = {
 
 char sqlKey[][20] = {
     "_order_by_",
-    "_order_by_desc",
+    "_order_by_desc_",
     "_gt_",
     "_lt_",
     "_ge_",
@@ -43,6 +43,12 @@ char *fileBuf = NULL;
 char line[256] = {'\0'};
 int  offset = 0;
 
+typedef struct vector_s
+{
+    int  cap;
+    char **arr;
+} vector_t;
+
 typedef struct fields_s
 {
     char    name[32];
@@ -58,18 +64,18 @@ typedef struct args_s
 
 typedef struct function_s
 {
-    char    fname[256];
-    int     numArgs;
-    args_t  *args;
+    char        fname[256];
+    int         tag;
+    vector_t    *args;
 } function_t;
 
 typedef struct table_s 
 {
     char        tblName[51];
-    int         numfld;
-    field_t     *fields;
-    int         numfunc;
-    function_t  *functions;
+    //int         numfld;
+    //field_t     *fields;
+    vector_t    *fields;
+    vector_t    *function;
 } table_t;
 
 int i, j;
@@ -110,8 +116,7 @@ char *mem_next(char *ptr)
 
 void exit_it(int no)
 {
-    if(fileBuf)
-        free(fileBuf);
+    destroy();
     exit(no);
 }
 
@@ -135,6 +140,40 @@ char *ltrim(char *buf)
 char *rtrim(char *buf, int len)
 {
     return buf;
+}
+
+vector_t *vector_new()
+{
+    vector_t *vec = mem_alloc(sizeof(vector_t));
+    vec->cap = 0;
+    vec->arr = mem_alloc(16 * sizeof(char *));
+    return vec;
+}
+
+int vector_add(vector_t *vec, char *data)
+{
+    if(vec->cap >= 16)
+    {
+        // re_alloc
+    }
+    int index = vec->cap;
+    vec->arr[index] = data;
+    vec->cap++;
+    return 0;
+}
+
+char *vector_get(vector_t *vec, int index)
+{
+    if (index >= vec->arr)
+        return NULL;
+    return vec->arr[index];
+}
+
+int vector_size(vector_t *vec)
+{
+    if(vec == NULL)
+        return 0;
+    return vec->cap;
 }
 
 //
@@ -212,13 +251,17 @@ int readFile(char *f)
 // get line
 char *getLine()
 {
+    if(offset >= strlen(fileBuf))
+        return NULL;
     memset(line, 0, 256);
     for(i=offset, j=0; fileBuf[i] != '\n';)
     {
+        if(fileBuf[i] == '\0')
+            break;
         line[j++] = fileBuf[i++];
     }
     offset = i+1;
-    return ltrim(line);
+    return line;
 }
 
 void printmem(char *ptr, int size)
@@ -233,58 +276,60 @@ void printmem(char *ptr, int size)
 
 field_t *getFieldByName(table_t *table, char *name)
 {
-    field_t *field = NULL;
-    char *ptr = (char *)table->fields;
-    for(i=0; i<table->numfld; i++)
-    {
-       
-        field = (field_t *)(ptr + i * (sizeof(field_t) + SIZE_INT));
-        //printf("get:%d, %d, %d\n", ptr, i * (sizeof(field_t) + SIZE_INT), field);
-        //printf("cmp:%s\n", field->name);
+    int k = 0;
+    int numFld = vector_size(table->fields);
+    field_t *field;
+    // printf("numfld: %d\n", numFld);
+    for(k=0; k<numFld; k++)
+    {  
+        field = vector_get(table->fields, k);
         if(strcmp(field->name, name) == 0)
         {
-            printf("compare ok:%s,%s\n", field->name, name);
             return field;
         }
-        
     }
     return NULL;
 }
 
-char word[100] = {'\0'};
-char *nextWord(char *buf)
+
+vector_t * splitWord(char *buf, char *tag)
 {
-    memset(word, 0, sizeof(word));
-    char *p = buf;
-    for(i=0; *buf != '\0'; i++)
+    vector_t *vec = vector_new();
+    char *p = strtok(buf, tag);
+    while(p)
     {
-        ;
+        //vec->arr[i++] = p;
+        vector_add(vec, p);
+        p = strtok(NULL, tag);
     }
+    return vec;
 }
 
-int parseTableStruct() 
+table_t *parseTableStruct() 
 {
     char    key[31] = {'\0'};
     char    fName[32];
     char    fType[10];
     int     len = 0;
-    table_t  table;
+    table_t  *table;
     field_t  *field;
 
+    table = (table_t *)mem_alloc(sizeof(table_t));
     char  *p = ltrim(getLine());
-    memset(&table, 0, sizeof(table));
-    sscanf(p, "%[^ ] %s", key, table.tblName);
+    sscanf(p, "%[^ ] %s", key, table->tblName);
     if (!define_key_check(key))
     {
         fprintf(stderr, "undefine table key:%s\n", key);
         exit_it(1);
     }
 
+    printf("parse begin\n");
+    table->fields = vector_new();
     while((p = ltrim(getLine())) != NULL)
     {
         if(strcmp(p, "end") == 0)
             break;
-
+        printf("table: %s\n", p);
         memset(fName, 0, sizeof(fName));
         memset(fType, 0, sizeof(fType));
         len = 0;
@@ -300,62 +345,174 @@ int parseTableStruct()
         strcpy(field->name, fName);
         strcpy(field->type, fType);
         field->length = len;
-        if(table.numfld == 0)
-            table.fields = field;
-        table.numfld++;
+        vector_add(table->fields, (char *)field);
     }
 
-    printf("field number: %d\n", table.numfld);
-    printf("tableName: %s\n", table.tblName);
+    //printf("field number: %d\n", table->numfld);
+    //printf("tableName: %s\n", table->tblName);
 
     //printmem(memory, 1024);
-
-    printf("sizeof field: %ld\n", sizeof(field_t));
-
-    //printmem();
-    field_t *f = getFieldByName(&table, "sex");
-    if(f == NULL)
+    char *ptrim = NULL;
+    vector_t *vec;
+    function_t *func;
+    table->function = vector_new();
+    while(1)
     {
-        printf("fail to get field\n");
-        return -1;
+        p = getLine();
+        if(p == NULL)
+        {
+            break;
+        }
+        //printf("func: %s\n", p);
+        ptrim = ltrim(p);
+        if(ptrim == NULL)
+        {
+            continue;
+        }
+
+        //printf("func trim: %s\n", ptrim);
+        if(strcmp(ptrim, "end") == 0)
+        {
+            break;
+        }
+ 
+        vec = splitWord(ptrim, " ");
+        //printf("vec size: %d\n", vec->cap);
+        if(strcmp(vec->arr[0], "end") == 0)
+            break;
+        if (!define_key_check(vec->arr[0]))
+        {
+            fprintf(stderr, "invalid function: %s\n", vec->arr[0]);
+            exit_it(1);
+        }
+        
+        function_t *func;
+        args_t  *args;
+        int v = 0;
+        if(strcmp(vec->arr[0], "va_func") == 0)
+        {
+            func = mem_alloc(sizeof(function_t));
+            func->args = vector_new();
+            func->tag = 0;
+            strcpy(func->fname, vec->arr[1]); 
+            //printf("func name:%s, %d\n", func->fname, vec->cap);
+            for(v=2; v<vec->cap; v++)
+            {
+                args = mem_alloc(sizeof(args_t));
+                if(strcmp(vec->arr[v], "end") == 0)
+                    break;
+                if(sql_key_check(vec->arr[v]))
+                {
+                    strcpy(args->symbol, vec->arr[v]);
+                    v++;
+                }
+                
+                if(strcmp(vec->arr[v], "_as_") == 0)
+                {
+                    memset(func->fname, 0, sizeof(func->fname));
+                    strcpy(func->fname, vec->arr[++v]);
+                    func->tag = 1;
+                    continue;
+                }
+                
+                args->fields = getFieldByName(table, vec->arr[v]);
+                if(args->fields == NULL)
+                {
+                    printf("invalid field:%s\n", vec->arr[v]);
+                    exit_it(1);
+                }  
+                //printf("=== %s\n", args->fields->name);
+                vector_add(func->args, (char *)args);
+            }
+            vector_add(table->function, (char *)func);
+        }
     }
 
-    printf("field: %s, %s, %d\n", f->name, f->type, f->length);
+    return table;
+}
+
+char sql[1024] = {'\0'};
+char fieldStr[1024] = {'\0'};
+char placeHolder[128] = {'\0'};
+
+int cvtSql(table_t *table)
+{
+    memset(sql, 0, sizeof(sql));
+    int count = vector_size(table->fields);
+    int k;
+    field_t *field;
+    for(k=0; k<count-1; k++)
+    {
+        field = (field_t *)vector_get(table->fields, k);
+        //strcat(fieldStr, "\r\t");
+        strcat(fieldStr, field->name);
+        strcat(fieldStr, ", ");
+        strcat(placeHolder, "?,");
+    }
+    field = (field_t *)vector_get(table->fields, k);
+    strcat(fieldStr, field->name);
+    strcat(placeHolder, "?");
+
+    sprintf(sql, "INSERT INTO %s(%s) VALUES(%s)", table->tblName, fieldStr, "?,?,?,?,?,?");
+
+    printf("sql: %s\n", sql);
+
+    memset(sql, 0, 1024);
+    sprintf(sql, "SELECT %s FROM %s", fieldStr, table->tblName);
+    printf("sql: %s\n", sql);
     return 0;
 }
 
-int cvtSql()
+int toFuncName(function_t *func)
 {
+    args_t *vargs;
+    int     k;
+    char  temp[256] = {'\0'};
+    strcat(temp, "int ");
+    //printf("func tag: %d\n", func->tag);
+    if(func->tag == 1)
+    {
+        strcat(temp, func->fname);
+        return 0;
+    }
+
+    strcat(temp, func->fname);
+    for(k=0; k<vector_size(func->args); k++)
+    {
+        vargs = (args_t *)vector_get(func->args, k);
+        if(strlen(vargs->symbol)>0)
+        {
+            strcat(temp, vargs->symbol);
+            strcat(temp, vargs->fields->name);
+        }
+        else
+        {
+            strcat(temp, "_");
+            strcat(temp, vargs->fields->name);
+        }
+    }
+
+    strcat(temp, "()");
+    printf("func name: %s\n", temp);
+
     return 0;
 }
 
 int main(int args, char *argv[])
 {
     init();
-    /*
-    char a[] = "    hello world";
-    printf("ltrim:%s\n", ltrim(a));
 
-    char b[10] = {'\0'}, c[20] = {'\0'};
-    int  d = 0;
-
-    char e[] = "     id      int";
-    char *f = ltrim(e);
-    sscanf(f, "%[^ ] %s %d", b, c, &d);
-    printf("%s, %s, %d\n", b, c, d);
-
-    printf("size: %d\n", sizeof(defineKey));
-    */
     readFile("test.act");
     // printf("filebuf: %s\n", fileBuf);
-    /*
-    printf("%s\n", getLine());
-    printf("%s\n", getLine());
-    printf("%s\n", getLine());
-    */
+    table_t *table = parseTableStruct();
 
-    parseTableStruct();
+    int numFunc = vector_size(table->function);
+    for(j=0; j<numFunc; j++)
+    {
+        toFuncName((function_t *)vector_get(table->function, j));
+    }
 
+    cvtSql(table); 
     destroy();
     return 0;
 }
