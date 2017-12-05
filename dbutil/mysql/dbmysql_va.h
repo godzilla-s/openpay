@@ -28,5 +28,7 @@ typedef struct db_mem_s
 
 #define ERR_DB_FIELD_TYPE_NOTMATCH      -10
 #define ERR_DB_INVALID_FIELD_TYPE       -11
+#define ERR_DB_NOT_FOUND_RESULT         -12
+#define ERR_DB_MULTI_RESULT_FOUND       -13
 
 #endif

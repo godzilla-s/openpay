@@ -1,6 +1,7 @@
 // mysql 数据库操作
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include "dbmysql_va.h"
 
 db_mem_t  *mem = NULL;
@@ -44,7 +45,6 @@ db_instance_t *
 db_instance_new(char *host, int port, char *dbname, char *dbuser, char *dbpasswd)
 {
     int ret;
-    
 
     db_instance_t *db = malloc(sizeof(db_instance_t));
     if (db == NULL)
@@ -89,6 +89,12 @@ db_instance_close(db_instance_t *db)
     mem = NULL;
 }
 
+void 
+db_select_init(db_select_t *select)
+{
+    select->stmt = NULL;
+}
+
 static int
 va_make_params_to_bind(va_list vargs, MYSQL_BIND *bind)
 {
@@ -122,18 +128,18 @@ va_make_params_to_bind(va_list vargs, MYSQL_BIND *bind)
 }
 
 /* 获取查询结果集 */
-int 
-db_va_open_select(db_instance_t *db, db_select_t *select, char *sql, ...)
+static int 
+db_va_open_select(db_instance_t *db, db_select_t *select, char *sql, va_list vargs)
 {
     void        *ptr; 
     int         type;
     int         len;
     int         ret, i; 
-    va_list     vargs;
+    //va_list     vargs;
     int         count = 0;
     MYSQL_BIND  *params = NULL;
 
-    va_start(vargs, sql);
+    //va_start(vargs, sql);
 
     if (!db || !select || !mem)
         return -1;
@@ -167,18 +173,21 @@ db_va_open_select(db_instance_t *db, db_select_t *select, char *sql, ...)
         return -1;
     }
 
+    /* 执行statement */
     ret = mysql_stmt_execute(select->stmt);
     if(ret)
     {
         return -1;
     }
 
+    /* */
     MYSQL_RES *result = mysql_stmt_result_metadata(select->stmt);
     if(result == NULL)
     {
         return -1;
     }
 
+    /* 获取字段 */
     MYSQL_FIELD *fields = mysql_fetch_fields(result);
     if(fields == NULL)
     {
@@ -228,23 +237,22 @@ db_va_open_select(db_instance_t *db, db_select_t *select, char *sql, ...)
     }
 
     // free(params);
-
     return 0;
 }
 
 /* 从select中获取数据 */ 
-int 
-db_va_select_fetch(db_select_t *select, ...)
+static int 
+db_va_select_fetch(db_select_t *select, va_list vargs)
 {
     int             ret, i = 0; 
     int             colCount = 0;
     int             type, len;
     void            *ptr = NULL;
-    va_list         vargs;
+    //va_list         vargs;
     
     MYSQL_BIND      *out = select->stmt->bind;
 
-    va_start(vargs, select);
+    //va_start(vargs, select);
 
     if(!mysql_stmt_fetch(select->stmt))
     {
@@ -262,7 +270,7 @@ db_va_select_fetch(db_select_t *select, ...)
                         return ERR_DB_FIELD_TYPE_NOTMATCH;
                     } 
                     memcpy(ptr, out[i].buffer, sizeof(long));
-                    printf("** %d\n", *(int *)ptr);
+                    //printf("** %d\n", *(int *)ptr);
                     break;
                 case FLD_STR:
                     if(out[i].buffer_type != MYSQL_TYPE_STRING)
@@ -294,6 +302,49 @@ db_va_select_close(db_select_t *select)
 {
     mem_clean(mem);
     mysql_stmt_close(select->stmt);
+}
+
+int 
+db_open_select_all(db_instance_t *db, db_select_t *select, char *sql, ...)
+{
+    va_list vargs;
+    va_start(vargs, sql);
+
+    return db_va_open_select(db, select, sql, vargs);
+}
+
+int 
+db_fetch_select(db_select_t *select, ...)
+{
+    va_list vargs;
+    va_start(vargs, select);
+    return db_va_select_fetch(select, vargs);
+}
+
+int 
+db_open_select_one(db_instance_t *db, char *sql, ...)
+{
+    va_list vargs;
+    va_start(vargs, sql);
+
+    db_select_t select;
+    db_select_init(&select);
+
+    int ret = db_va_open_select(db, &select, sql, vargs);
+    if(ret)
+        return ret;
+
+    int rowCount = mysql_stmt_num_rows(select.stmt);
+    if(rowCount < 1)
+        return ERR_DB_NOT_FOUND_RESULT;
+    if(rowCount > 1)
+        return ERR_DB_MULTI_RESULT_FOUND;
+    
+    ret =  db_va_select_fetch(&select, vargs);
+    if(ret)
+        return ret;
+    db_va_select_close(&select);
+    return 0;
 }
 
 /* 执行insert,Update操作 */
@@ -369,7 +420,7 @@ int main()
         printf("fail to new db\n");
         return -1;
     }
-printf("db_instance_new ok\n");
+    printf("db_instance_new ok\n");
 
     db_select_t     select;
     int  ret;
@@ -379,7 +430,7 @@ printf("db_instance_new ok\n");
     char title[30] = {'\0'};
 
 
-    ret = db_va_open_select(db, &select, "select * from person", NULL);
+    ret = db_open_select_all(db, &select, "select * from person", NULL);
     if(ret)
     {
         printf("fail to open select\n");
@@ -392,7 +443,7 @@ printf("db_instance_new ok\n");
     {
         memset(name, 0, 32);
         memset(title, 0, 30);
-        ret = db_va_select_fetch(&select, 
+        ret = db_fetch_select(&select, 
             &pid, FLD_INT, -1,
             name, FLD_STR, 30,
             &depno, FLD_INT, -1,
@@ -412,12 +463,15 @@ printf("db_instance_new ok\n");
     char    userTitle[31];
     char    sex[11];
 
-    ret = db_va_open_select(db, &select, "select * from user", NULL);
+    ret = db_open_select_all(db, &select, "select * from user", NULL);
     if(ret)
     {
         printf("fail to select user\n");
         return -1;
     }
+
+    int count = mysql_stmt_num_rows(select.stmt);
+    printf("result count: %d\n", count);
 
     while(1)
     {
@@ -425,7 +479,7 @@ printf("db_instance_new ok\n");
         memset(userTitle, 0, 31);
         memset(sex, 0, 11);
 
-        ret = db_va_select_fetch(&select,
+        ret = db_fetch_select(&select,
             &userId, FLD_INT, -1,
             userName, FLD_STR, 30,
             userTitle, FLD_STR, 30,
@@ -437,7 +491,7 @@ printf("db_instance_new ok\n");
         }
         printf("user: %d, %s, %s, %s\n", userId, userName, userTitle, sex);
     }
-
+    db_va_select_close(&select);
 /*
     id = 3;
     depno = 120;
