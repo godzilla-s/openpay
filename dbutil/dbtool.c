@@ -72,8 +72,6 @@ typedef struct function_s
 typedef struct table_s 
 {
     char        tblName[51];
-    //int         numfld;
-    //field_t     *fields;
     vector_t    *fields;
     vector_t    *function;
 } table_t;
@@ -391,14 +389,14 @@ table_t *parseTableStruct()
         int v = 0;
         if(strcmp(vec->arr[0], "va_func") == 0)
         {
-            func = mem_alloc(sizeof(function_t));
+            func = (function_t *)mem_alloc(sizeof(function_t));
             func->args = vector_new();
             func->tag = 0;
             strcpy(func->fname, vec->arr[1]); 
             //printf("func name:%s, %d\n", func->fname, vec->cap);
             for(v=2; v<vec->cap; v++)
             {
-                args = mem_alloc(sizeof(args_t));
+                args = (args_t *)mem_alloc(sizeof(args_t));
                 if(strcmp(vec->arr[v], "end") == 0)
                     break;
                 if(sql_key_check(vec->arr[v]))
@@ -463,11 +461,12 @@ int cvtSql(table_t *table)
     return 0;
 }
 
-int toFuncName(function_t *func)
+int toFuncName(function_t *func, char *tblName)
 {
     args_t *vargs;
     int     k;
     char  temp[256] = {'\0'};
+    char  argstr[256] = {'\0'};
     strcat(temp, "int ");
     //printf("func tag: %d\n", func->tag);
     if(func->tag == 1)
@@ -490,9 +489,21 @@ int toFuncName(function_t *func)
             strcat(temp, "_");
             strcat(temp, vargs->fields->name);
         }
+
+        if(strcmp(vargs->fields->type, "int") == 0)
+            strcat(argstr, "int ");
+        if(strcmp(vargs->fields->type, "str") == 0)
+            strcat(argstr, "char *");
+        if(strcmp(vargs->fields->type, "double") == 0)
+            strcat(argstr, "double ");
+        strcat(argstr, vargs->fields->name);
+        strcat(argstr, ", ");
     }
 
-    strcat(temp, "()");
+    strcat(temp, "(");
+    strcat(temp, argstr);
+    strcat(temp, tblName);
+    strcat(temp, " *_o_data)");
     printf("func name: %s\n", temp);
 
     return 0;
@@ -502,14 +513,14 @@ int main(int args, char *argv[])
 {
     init();
 
-    readFile("test.act");
+    readFile("temp.act");
     // printf("filebuf: %s\n", fileBuf);
     table_t *table = parseTableStruct();
 
     int numFunc = vector_size(table->function);
     for(j=0; j<numFunc; j++)
     {
-        toFuncName((function_t *)vector_get(table->function, j));
+        toFuncName((function_t *)vector_get(table->function, j), table->tblName);
     }
 
     cvtSql(table); 

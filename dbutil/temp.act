@@ -1,4 +1,4 @@
-va_table Test
+va_table Student
     id      int 
     name    str     32
     birth   str     20
@@ -7,9 +7,8 @@ end
 
 va_func read_by id end 
 va_func add end 
-va_func read_by id name order_by id end 
-
-va_func update_by id  end 
+va_func read_by name _order_by_ id end 
+va_func update_by name birth  end 
 va_func read_by id name birth end 
 
 end
