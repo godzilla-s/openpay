@@ -139,26 +139,25 @@ db_va_open_select(db_instance_t *db, db_select_t *select, char *sql, va_list var
     int         count = 0;
     MYSQL_BIND  *params = NULL;
 
-    //va_start(vargs, sql);
-
-    if (!db || !select || !mem)
-        return -1;
-
+    printf("begin stmt init\n");
     select->stmt = mysql_stmt_init(db->mysql);
     if(!select->stmt)
     {
         return -1;
     }
 
+    printf("begin stmt prepare, %s\n", sql);
     if(mysql_stmt_prepare(select->stmt, sql, strlen(sql)))
     {
         return -1;
     }
 
+    printf("begin stmt param\n");
     count = mysql_stmt_param_count(select->stmt);
     if(count > 0)
         params = mem_alloc(mem,count *  sizeof(MYSQL_BIND));
     
+    printf("begin parse param\n");
     /* parse in params and set bind parameters */
     ret = va_make_params_to_bind(vargs, params);
     if(ret)
@@ -166,6 +165,7 @@ db_va_open_select(db_instance_t *db, db_select_t *select, char *sql, va_list var
         return ret;
     }
 
+    printf("begin bind param\n");
     /* bind stmt parameters */
     ret = mysql_stmt_bind_param(select->stmt, params);
     if(ret)
@@ -327,18 +327,20 @@ db_open_select_one(db_instance_t *db, char *sql, ...)
     va_list vargs;
     va_start(vargs, sql);
 
+    printf("init\n");
     db_select_t select;
-    db_select_init(&select);
-
+    //db_select_init(&select);
+    printf("begin query\n");
     int ret = db_va_open_select(db, &select, sql, vargs);
     if(ret)
         return ret;
 
+    printf("num row\n");
     int rowCount = mysql_stmt_num_rows(select.stmt);
     if(rowCount < 1)
-        return ERR_DB_NOT_FOUND_RESULT;
+        return ERR_DB_NOT_FOUND;
     if(rowCount > 1)
-        return ERR_DB_MULTI_RESULT_FOUND;
+        return ERR_DB_MULTI_FOUND;
     
     ret =  db_va_select_fetch(&select, vargs);
     if(ret)
@@ -407,14 +409,14 @@ db_va_execute(db_instance_t *db, char *sql, ...)
 int main()
 {
     const char* host = "localhost";  
-    const char* user = "root";  
+    const char* dbuser = "root";  
     const char* password = "123456";  
     const char* database = "mybase";  
     const int   port = 3306;  
     const char* socket = NULL;
     const int   flag = 0;
 
-    db_instance_t *db = db_instance_new(host, port, database, user, password);
+    db_instance_t *db = db_instance_new(host, port, database, dbuser, password);
     if (!db)
     {
         printf("fail to new db\n");
@@ -426,7 +428,7 @@ int main()
     int  ret;
     int  pid;
     char name[32] = {'\0'};
-    int depno;
+    int  depno;
     char title[30] = {'\0'};
 
 
@@ -506,7 +508,31 @@ int main()
         NULL);
     printf("execute result: %d\n", ret);
 */
+    typedef struct user_size_t{
+        int     id;
+        char    name[31];
+        char    title[31];
+        char    sex[11];
+    } user_t;
 
+    int id = 1;
+    user_t user;
+    memset(&user, 0, sizeof(user_t));
+    ret = db_open_select_one(db, "select * from user where id>?", 
+            &id, FLD_INT, -1, 
+            NULL, 
+            &user.id, FLD_INT, -1,
+            user.name, FLD_STR, 30,
+            user.title, FLD_STR, 30,
+            user.sex, FLD_STR, 10,
+            NULL);
+    if(ret)
+    {
+        printf("fail to open select one:%d\n", ret);
+        return ret;
+    }
+
+    printf("%d, %s, %s, %s\n", user.id, user.name, user.title, user.sex);
     db_instance_close(db); 
 
     return 0;

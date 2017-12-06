@@ -1,15 +1,15 @@
-begin_table Test
+va_table Test
     id      int 
     name    str     32
     birth   str     20
     nation  str     30
 end
 
-begin_func read_by id end 
-begin_func add end 
-begin_func read_by id name order_by id end 
+va_func read_by id end 
+va_func add end 
+va_func read_by id name order_by id end 
 
-begin_func update_by id as db_update end 
-begin_func read_by id name birth as read_tables_2 end 
+va_func update_by id  end 
+va_func read_by id name birth end 
 
-// dbtool -f temp.act -o
+end
