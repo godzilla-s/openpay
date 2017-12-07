@@ -429,65 +429,62 @@ table_t *parseTableStruct()
     return table;
 }
 
-char sql[1024] = {'\0'};
-char fieldStr[1024] = {'\0'};
-char placeHolder[128] = {'\0'};
-
-int cvtSql(table_t *table)
+char *cvtSql(vector_t *fields, char *tblName, function_t *func)
 {
-    memset(sql, 0, sizeof(sql));
-    int count = vector_size(table->fields);
+    char  placeHolder[128] = {'\0'};
+    char fieldStr[1024] = {'\0'};
+    field_t  *field;
     int k;
-    field_t *field;
-    for(k=0; k<count-1; k++)
+    char *sql = mem_alloc(512);
+    for(k=0; k<vector_size(fields)-1; k++)
     {
-        field = (field_t *)vector_get(table->fields, k);
-        //strcat(fieldStr, "\r\t");
+        field = (field_t *)vector_get(fields, k);
         strcat(fieldStr, field->name);
         strcat(fieldStr, ", ");
         strcat(placeHolder, "?,");
     }
-    field = (field_t *)vector_get(table->fields, k);
+    field = (field_t *)vector_get(fields, k);
     strcat(fieldStr, field->name);
     strcat(placeHolder, "?");
 
-    sprintf(sql, "INSERT INTO %s(%s) VALUES(%s)", table->tblName, fieldStr, "?,?,?,?,?,?");
-
-    printf("sql: %s\n", sql);
-
-    memset(sql, 0, 1024);
-    sprintf(sql, "SELECT %s FROM %s", fieldStr, table->tblName);
-    printf("sql: %s\n", sql);
-    return 0;
+    if(strcmp(func->fname, "add") == 0)
+    {
+        sprintf(sql, "INSERT INTO %s(%s) VALUES(%s)", tblName, fieldStr, placeHolder);
+    }
+    if(strcmp(func->fname, "read_by") == 0)
+    {
+        sprintf(sql, "SELECT %s FROM %s", fieldStr, tblName);
+    }
+    return sql;
 }
 
-int toFuncName(function_t *func, char *tblName)
+char *toFuncName(function_t *func, char *tblName)
 {
     args_t *vargs;
     int     k;
-    char  temp[256] = {'\0'};
+    char  *funcName = mem_alloc(256);
     char  argstr[256] = {'\0'};
-    strcat(temp, "int ");
+    strcat(funcName, "int ");
     //printf("func tag: %d\n", func->tag);
     if(func->tag == 1)
     {
-        strcat(temp, func->fname);
-        return 0;
+        strcat(funcName, func->fname);
+        return NULL;
     }
 
-    strcat(temp, func->fname);
+    strcat(funcName, func->fname);
     for(k=0; k<vector_size(func->args); k++)
     {
         vargs = (args_t *)vector_get(func->args, k);
         if(strlen(vargs->symbol)>0)
         {
-            strcat(temp, vargs->symbol);
-            strcat(temp, vargs->fields->name);
+            strcat(funcName, vargs->symbol);
+            strcat(funcName, vargs->fields->name);
         }
         else
         {
-            strcat(temp, "_");
-            strcat(temp, vargs->fields->name);
+            strcat(funcName, "_");
+            strcat(funcName, vargs->fields->name);
         }
 
         if(strcmp(vargs->fields->type, "int") == 0)
@@ -500,11 +497,27 @@ int toFuncName(function_t *func, char *tblName)
         strcat(argstr, ", ");
     }
 
-    strcat(temp, "(");
-    strcat(temp, argstr);
-    strcat(temp, tblName);
-    strcat(temp, " *_o_data)");
-    printf("func name: %s\n", temp);
+    strcat(funcName, "(");
+    strcat(funcName, argstr);
+    strcat(funcName, tblName);
+    strcat(funcName, " *_o_data)");
+    //printf("func name: %s\n", funcName);
+
+    return funcName;
+}
+
+int fmtFunction(char *funcName, table_t *table, char *sql) 
+{
+    printf("%s\n", funcName);
+    fprintf(stderr, "{\n");
+    fprintf(stderr, "\t%s\t_raw;\n", table->tblName);
+    fprintf(stderr, "\tmemset(&_raw, '0', sizeof(%s))\n", table->tblName);
+    fprintf(stderr, "\tint ret = %s(&db, \"%s\")\n", "db_execute", sql);
+    fprintf(stderr, "\tif (ret)\n");
+    fprintf(stderr, "\t{\n\t\treturn ret\n\t}\n\n");
+    fprintf(stderr, "\tmemcpy(_o_data, &_raw, sizeof(_raw));\n");
+    fprintf(stderr, "\n\n\treturn 0;\n");
+    fprintf(stderr, "}\n\n\n");
 
     return 0;
 }
@@ -518,12 +531,20 @@ int main(int args, char *argv[])
     table_t *table = parseTableStruct();
 
     int numFunc = vector_size(table->function);
+    char *fname = NULL;
+    char *sql = NULL;
+    function_t *func = NULL;
     for(j=0; j<numFunc; j++)
     {
-        toFuncName((function_t *)vector_get(table->function, j), table->tblName);
+        func = (function_t *)vector_get(table->function, j);
+        fname = toFuncName(func, table->tblName);
+        if(fname == NULL)
+        {
+            continue;
+        }
+        sql = cvtSql(table->fields, table->tblName, func);
+        fmtFunction(fname, table, sql);
     }
-
-    cvtSql(table); 
     destroy();
     return 0;
 }
