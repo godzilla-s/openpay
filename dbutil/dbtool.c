@@ -290,7 +290,7 @@ field_t *getFieldByName(table_t *table, char *name)
 }
 
 
-vector_t * splitWord(char *buf, char *tag)
+vector_t* splitWord(char *buf, char *tag)
 {
     vector_t *vec = vector_new();
     char *p = strtok(buf, tag);
@@ -506,13 +506,13 @@ char *toFuncName(function_t *func, char *tblName)
     return funcName;
 }
 
-int fmtFunction(char *funcName, table_t *table, char *sql) 
+int fmtFunction(char *funcName, char *callFunc, table_t *table, char *sql) 
 {
     printf("%s\n", funcName);
     fprintf(stderr, "{\n");
     fprintf(stderr, "\t%s\t_raw;\n", table->tblName);
     fprintf(stderr, "\tmemset(&_raw, '0', sizeof(%s))\n", table->tblName);
-    fprintf(stderr, "\tint ret = %s(&db, \"%s\")\n", "db_execute", sql);
+    fprintf(stderr, "\tint ret = %s(\"%s\")\n", callFunc, sql);
     fprintf(stderr, "\tif (ret)\n");
     fprintf(stderr, "\t{\n\t\treturn ret\n\t}\n\n");
     fprintf(stderr, "\tmemcpy(_o_data, &_raw, sizeof(_raw));\n");
@@ -543,7 +543,12 @@ int main(int args, char *argv[])
             continue;
         }
         sql = cvtSql(table->fields, table->tblName, func);
-        fmtFunction(fname, table, sql);
+        if(strcmp(func->fname, "add") == 0)
+            fmtFunction(fname, "db_va_execute", table, sql);
+        if(strcmp(func->fname, "read_by") == 0)
+            fmtFunction(fname, "db_va_read_one", table, sql);
+        if(strcmp(func->fname, "open_select_by") == 0)
+            fmtFunction(fname, "db_va_read_all", table, sql);
     }
     destroy();
     return 0;
