@@ -64,6 +64,7 @@ typedef struct args_s
 
 typedef struct function_s
 {
+    char        funcAct[50];
     char        fname[256];
     int         tag;
     vector_t    *args;
@@ -162,7 +163,7 @@ int vector_add(vector_t *vec, char *data)
 
 char *vector_get(vector_t *vec, int index)
 {
-    if (index >= vec->arr)
+    if (index >= vec->cap)
         return NULL;
     return vec->arr[index];
 }
@@ -392,7 +393,7 @@ table_t *parseTableStruct()
             func = (function_t *)mem_alloc(sizeof(function_t));
             func->args = vector_new();
             func->tag = 0;
-            strcpy(func->fname, vec->arr[1]); 
+            strcpy(func->funcAct, vec->arr[1]); 
             //printf("func name:%s, %d\n", func->fname, vec->cap);
             for(v=2; v<vec->cap; v++)
             {
@@ -407,8 +408,8 @@ table_t *parseTableStruct()
                 
                 if(strcmp(vec->arr[v], "_as_") == 0)
                 {
-                    memset(func->fname, 0, sizeof(func->fname));
-                    strcpy(func->fname, vec->arr[++v]);
+                    memset(func->funcAct, 0, sizeof(func->funcAct));
+                    strcpy(func->funcAct, vec->arr[++v]);
                     func->tag = 1;
                     continue;
                 }
@@ -447,18 +448,18 @@ char *cvtSql(vector_t *fields, char *tblName, function_t *func)
     strcat(fieldStr, field->name);
     strcat(placeHolder, "?");
 
-    if(strcmp(func->fname, "add") == 0)
+    if(strcmp(func->funcAct, "add") == 0)
     {
         sprintf(sql, "INSERT INTO %s(%s) VALUES(%s)", tblName, fieldStr, placeHolder);
     }
-    if(strcmp(func->fname, "read_by") == 0)
+    if(strcmp(func->funcAct, "read_by") == 0)
     {
         sprintf(sql, "SELECT %s FROM %s", fieldStr, tblName);
     }
     return sql;
 }
 
-char *toFuncName(function_t *func, char *tblName)
+char *toFuncname(function_t *func, char *tblName)
 {
     args_t *vargs;
     int     k;
@@ -468,11 +469,11 @@ char *toFuncName(function_t *func, char *tblName)
     //printf("func tag: %d\n", func->tag);
     if(func->tag == 1)
     {
-        strcat(funcName, func->fname);
+        strcat(funcName, func->funcAct);
         return NULL;
     }
 
-    strcat(funcName, func->fname);
+    sprintf(funcName+strlen(funcName), "tb_%s_%s", tblName, func->funcAct);
     for(k=0; k<vector_size(func->args); k++)
     {
         vargs = (args_t *)vector_get(func->args, k);
@@ -493,6 +494,7 @@ char *toFuncName(function_t *func, char *tblName)
             strcat(argstr, "char *");
         if(strcmp(vargs->fields->type, "double") == 0)
             strcat(argstr, "double ");
+        strcat(argstr, "o_");
         strcat(argstr, vargs->fields->name);
         strcat(argstr, ", ");
     }
@@ -516,19 +518,36 @@ char *funcArgs(function_t *func)
         arg = (args_t *)vector_get(func->args, k);
         if(strcmp(arg->fields->type, "int") == 0)
         {
-            strcat(outStr, "\t\t&o_");
-            strcat(outStr, arg->fields->name);
-            strcat(outStr, ", FLD_INT, -1");
+            sprintf(outStr+strlen(outStr), "\t\t&o_%s, FLD_INT, -1,\n", arg->fields->name);
         }
         if(strcmp(arg->fields->type, "str") == 0)
         {
-            strcat(outStr, "\t\t&o_");
-            strcat(outStr, arg->fields->name);
-            strcat(outStr, ", FLD_STR, 50");
+            sprintf(outStr+strlen(outStr), "\t\to_%s, FLD_STR, %d,\n", arg->fields->name, arg->fields->length);
         }
     }
-
+    strcat(outStr, "\t\tNULL,\n");
     return outStr;
+}
+
+char *tableArgs(table_t *table)
+{
+    char *out = mem_alloc(512);
+    int k;
+    field_t *field;
+    for(k=0; k<vector_size(table->fields); k++)
+    {
+        field = (field_t *)vector_get(table->fields, k);
+        if(strcmp(field->type, "int") == 0)
+        {
+            sprintf(out+strlen(out), "\t\t&_raw.%s, FLD_INT, -1,\n", field->name);
+        }
+        if(strcmp(field->type, "str") == 0)
+        {
+            sprintf(out+strlen(out), "\t\t_raw.%s, FLD_STR, %d,\n", field->name, field->length);
+        }
+    }
+    strcat(out, "\t\tNULL");
+    return out;
 }
 
 FILE *fp = NULL;
@@ -541,6 +560,9 @@ int fmtHeader(table_t *table)
     header = fopen("temp.h", "w");
     if(!header)
         return -1;
+    fprintf(header, "#ifndef _DB_DEF_%s_H\n", table->tblName);
+    fprintf(header, "#define _DB_DEF_%s_H\n", table->tblName);
+    fprintf(header, "\n\n");
     fprintf(header, "typedef struct tb_%s_s\n", table->tblName);
     fprintf(header, "{\n");
     for(k=0; k<vector_size(table->fields); k++)
@@ -554,6 +576,7 @@ int fmtHeader(table_t *table)
             fprintf(header, "\tdouble\t\t%s;\n", field->name);
     }
     fprintf(header, "} tb_%s;\n\n", table->tblName);
+    fprintf(header, "#endif\n");
 
     fclose(header);
     return 0;
@@ -566,10 +589,13 @@ int fmtSelect(char *funcName, function_t *func, table_t *table)
     fprintf(fp, "%s\n", funcName);
     fprintf(fp, "{\n");
     fprintf(fp, "\tint ret;\n");
-    fprintf(fp, "\t%s _raw;\n", table->tblName);
+    fprintf(fp, "\ttb_%s _raw;\n", table->tblName);
     fprintf(fp, "\tmemset(&_raw, '0', sizeof(_raw));\n");
-    fprintf(fp, "\tret = %s(\"%s\");\n", "db_va_read_one", sql);
-    fprintf(fp, "\tif (ret)\n\t{\n\t\treturn ret;\n\t}\n");
+    char *argstr = funcArgs(func);
+    char *argAll = tableArgs(table);
+    fprintf(fp, "\tret = %s(\"%s\", \n%s%s);\n", "db_va_read_one", sql, argstr, argAll);
+    fprintf(fp, "\tif (ret)\n\t{\n\t\treturn ret;\n\t}\n\n");
+    fprintf(fp, "\tmemcpy(_o_data, &_raw, sizeof(_raw));\n\n");
     fprintf(fp, "\treturn 0;\n}\n\n");
     return 0;
 }
@@ -577,12 +603,15 @@ int fmtSelect(char *funcName, function_t *func, table_t *table)
 int fmtInsert(char *funcName, function_t *func, table_t *table)
 {
     char *sql = cvtSql(table->fields, table->tblName, func);
-    fprintf(stderr, "%s\n", funcName);
-    fprintf(stderr, "{\n");
-    fprintf(stderr, "\tint ret;\n");
-    fprintf(stderr, "\tret = %s(\"%s\");\n", "db_va_execute", sql);
-    fprintf(stderr, "\tif (ret)\n\t{\n\t\treturn ret;\n\n}");
-    fprintf(stderr, "\treturn 0;\n}\n\n");
+    fprintf(fp, "%s\n", funcName);
+    fprintf(fp, "{\n");
+    fprintf(fp, "\tint ret;\n");
+    fprintf(fp, "\ttb_%s _raw;\n", table->tblName);
+    fprintf(fp, "\tmemcpy(&_raw, _o_data, sizeof(_raw));\n");
+    char *argAll = tableArgs(table);
+    fprintf(fp, "\tret = %s(\"%s\", %s);\n", "db_va_execute", sql, argAll);
+    fprintf(fp, "\tif (ret)\n\t{\n\t\treturn ret;\t}\n\n");
+    fprintf(fp, "\treturn 0;\n}\n\n");
 
     return 0;
 }
@@ -610,15 +639,15 @@ int main(int args, char *argv[])
     for(j=0; j<numFunc; j++)
     {
         func = (function_t *)vector_get(table->function, j);
-        fname = toFuncName(func, table->tblName);
+        fname = toFuncname(func, table->tblName);
         if(fname == NULL)
         {
             continue;
         }
 
-        if(strcmp(func->fname, "add") == 0)
+        if(strcmp(func->funcAct, "add") == 0)
             fmtInsert(fname, func, table);
-        if(strcmp(func->fname, "read_by") == 0)
+        if(strcmp(func->funcAct, "read_by") == 0)
             fmtSelect(fname, func, table);
     }
     fclose(fp);
