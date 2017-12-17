@@ -3,3 +3,7 @@
 #include "service.h"
 #include "common.h"
 
+int engine_get_service(char *servcode)
+{
+    
+}

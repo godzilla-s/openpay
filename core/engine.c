@@ -30,10 +30,13 @@ engine_init()
     ret = load_pkg(&engine->pkg);
     if (ret)
     {
-        log(ll_error, "fail to loadd pkg");
+        log(ll_error, "fail to load pkg");
         return -1;
     }
 
     ret = load_flowchart(&engine->flowchart);
-
+    if (ret)
+    {
+        log(ll_error, "fail to load flowchart")
+    }
 }
